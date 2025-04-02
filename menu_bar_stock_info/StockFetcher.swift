@@ -59,18 +59,20 @@ class StockFetcher {
                     }
                     
                     guard let recentData = recentData,
-                          let price = recentData.price,
-                          let change = recentData.change,
-                          let changePercent = recentData.changePercent else {
+                          let price = recentData.regularMarketPrice else {
                         promise(.failure(NSError(domain: "com.menu-bar-stock-info", code: 2, userInfo: [NSLocalizedDescriptionKey: "無法獲取實時股價數據"])))
                         return
                     }
+                    
+                    // 從摘要中獲取漲跌數據
+                    let change = summary.regularMarketChange?.value ?? 0.0
+                    let changePercent = summary.regularMarketChangePercent?.value ?? 0.0
                     
                     // 創建 StockModel
                     let stock = StockModel(
                         symbol: symbol,
                         name: summary.shortName ?? symbol,
-                        price: price,
+                        price: Double(price),
                         change: change,
                         changePercent: changePercent,
                         volume: summary.regularMarketVolume?.value ?? 0,

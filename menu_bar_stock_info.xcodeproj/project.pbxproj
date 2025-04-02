@@ -6,6 +6,10 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		FF65D7992D9D20BA00FEED7C /* SwiftYFinance in Frameworks */ = {isa = PBXBuildFile; productRef = FF65D7982D9D20BA00FEED7C /* SwiftYFinance */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
 		FFE9326D2D9D0E9A003E1B79 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -52,6 +56,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				FF65D7992D9D20BA00FEED7C /* SwiftYFinance in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -112,6 +117,7 @@
 			);
 			name = menu_bar_stock_info;
 			packageProductDependencies = (
+				FF65D7982D9D20BA00FEED7C /* SwiftYFinance */,
 			);
 			productName = menu_bar_stock_info;
 			productReference = FFE9325E2D9D0E94003E1B79 /* menu_bar_stock_info.app */;
@@ -569,6 +575,14 @@
 			};
 		};
 /* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		FF65D7982D9D20BA00FEED7C /* SwiftYFinance */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = FFE9329C2D9D1EFD003E1B79 /* XCRemoteSwiftPackageReference "SwiftYFinance" */;
+			productName = SwiftYFinance;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = FFE932562D9D0E94003E1B79 /* Project object */;
 }
