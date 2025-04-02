@@ -8,17 +8,24 @@
 import Foundation
 import Combine
 import OSLog
+import SwiftYFinance
 
 class StockFetcher {
     private let logger = Logger(subsystem: "com.menu-bar-stock-info", category: "StockFetcher")
+    private let yFinance = SwiftYFinance()
     
     // 從 API 獲取股票數據
     func fetchStockData(for symbol: String) -> AnyPublisher<StockModel, Error> {
         logger.info("Fetching stock data for \(symbol)")
         
-        // TODO: 整合 SwiftYFinance 獲取實際數據
-        // 暫時返回模擬數據
-        return mockFetchStockData(for: symbol)
+        // 使用 SwiftYFinance 獲取實際數據
+        return fetchRealStockData(for: symbol)
+            .catch { error -> AnyPublisher<StockModel, Error> in
+                // 如果獲取失敗，使用模擬數據
+                self.logger.error("Failed to fetch data for \(symbol): \(error.localizedDescription)")
+                return self.mockFetchStockData(for: symbol)
+            }
+            .eraseToAnyPublisher()
     }
     
     // 獲取多支股票數據
@@ -30,7 +37,78 @@ class StockFetcher {
             .eraseToAnyPublisher()
     }
     
-    // 模擬數據
+    // 使用 SwiftYFinance 獲取實際股票數據
+    private func fetchRealStockData(for symbol: String) -> AnyPublisher<StockModel, Error> {
+        return Future<StockModel, Error> { promise in
+            // 獲取股票報價
+            self.yFinance.fetchQuote(ticker: symbol) { result, error in
+                if let error = error {
+                    promise(.failure(error))
+                    return
+                }
+                
+                guard let quote = result,
+                      let price = quote.bid.value ?? quote.regularMarketPrice,
+                      let change = quote.regularMarketChange,
+                      let changePercent = quote.regularMarketChangePercent,
+                      let volume = quote.regularMarketVolume else {
+                    promise(.failure(NSError(domain: "com.menu-bar-stock-info", code: 1, userInfo: [NSLocalizedDescriptionKey: "不完整的股票數據"])))
+                    return
+                }
+                
+                // 創建 StockModel
+                let stock = StockModel(
+                    symbol: symbol,
+                    name: quote.shortName ?? symbol,
+                    price: price,
+                    change: change,
+                    changePercent: changePercent,
+                    volume: volume,
+                    marketCap: quote.marketCap,
+                    high52Week: quote.fiftyTwoWeekHigh,
+                    low52Week: quote.fiftyTwoWeekLow,
+                    timestamp: Date()
+                )
+                
+                promise(.success(stock))
+            }
+        }
+        .timeout(5, scheduler: DispatchQueue.global()) // 設置超時時間
+        .eraseToAnyPublisher()
+    }
+    
+    // 獲取股票歷史數據
+    func fetchHistoricalData(for symbol: String, period: String = "1mo") -> AnyPublisher<[HistoricalDataPoint], Error> {
+        return Future<[HistoricalDataPoint], Error> { promise in
+            self.yFinance.fetchChartData(for: symbol, period: period) { result, error in
+                if let error = error {
+                    promise(.failure(error))
+                    return
+                }
+                
+                guard let chartData = result,
+                      let timestamps = chartData.meta.timestamp,
+                      let prices = chartData.meta.regularMarketPrice,
+                      timestamps.count == prices.count else {
+                    promise(.failure(NSError(domain: "com.menu-bar-stock-info", code: 2, userInfo: [NSLocalizedDescriptionKey: "無效的歷史數據"])))
+                    return
+                }
+                
+                var dataPoints: [HistoricalDataPoint] = []
+                
+                for i in 0..<timestamps.count {
+                    let timestamp = Date(timeIntervalSince1970: Double(timestamps[i]))
+                    dataPoints.append(HistoricalDataPoint(date: timestamp, price: prices[i]))
+                }
+                
+                promise(.success(dataPoints))
+            }
+        }
+        .timeout(10, scheduler: DispatchQueue.global())
+        .eraseToAnyPublisher()
+    }
+    
+    // 模擬數據（作為備用）
     private func mockFetchStockData(for symbol: String) -> AnyPublisher<StockModel, Error> {
         let mockData: StockModel
         
@@ -149,10 +227,9 @@ class StockFetcher {
     }
 }
 
-// MARK: - 未來 SwiftYFinance 整合
-extension StockFetcher {
-    // TODO: 使用 SwiftYFinance 實現實際的數據獲取
-    // func fetchRealStockData(for symbol: String) -> AnyPublisher<StockModel, Error> {
-    //     // 實際實現將在整合 SwiftYFinance 時添加
-    // }
+// 歷史數據點結構
+struct HistoricalDataPoint: Identifiable {
+    var id = UUID()
+    let date: Date
+    let price: Double
 } 

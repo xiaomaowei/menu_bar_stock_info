@@ -13,60 +13,27 @@ class StockViewModel: ObservableObject {
     @Published var stocks: [StockModel] = []
     @Published var isLoading: Bool = false
     @Published var error: String? = nil
+    @Published var historicalData: [String: [HistoricalDataPoint]] = [:]
     
     private var cancellables = Set<AnyCancellable>()
     private let logger = Logger(subsystem: "com.menu-bar-stock-info", category: "StockViewModel")
+    private let stockFetcher = StockFetcher()
     
     private var config: ConfigModel
+    private var fetchTimer: Timer?
     
     init() {
         // 從 UserDefaults 加載配置
         config = ConfigModel.loadFromUserDefaults()
         
-        // 加載初始測試數據
-        loadMockData()
-    }
-    
-    // 加載測試數據
-    private func loadMockData() {
-        stocks = [
-            StockModel(
-                symbol: "AAPL",
-                name: "Apple Inc.",
-                price: 165.23,
-                change: 1.23,
-                changePercent: 0.75,
-                volume: 45_678_900,
-                marketCap: 2_700_000_000_000,
-                high52Week: 188.52,
-                low52Week: 143.90,
-                timestamp: Date()
-            ),
-            StockModel(
-                symbol: "MSFT",
-                name: "Microsoft Corporation",
-                price: 305.42,
-                change: -2.34,
-                changePercent: -0.76,
-                volume: 32_456_700,
-                marketCap: 2_300_000_000_000,
-                high52Week: 315.95,
-                low52Week: 275.37,
-                timestamp: Date()
-            ),
-            StockModel(
-                symbol: "GOOG",
-                name: "Alphabet Inc.",
-                price: 142.56,
-                change: 0.87,
-                changePercent: 0.61,
-                volume: 28_345_600,
-                marketCap: 1_800_000_000_000,
-                high52Week: 150.28,
-                low52Week: 120.47,
-                timestamp: Date()
-            )
-        ]
+        // 如果沒有配置的股票，設置初始默認股票
+        if config.stockSymbols.isEmpty {
+            config.stockSymbols = ["AAPL", "MSFT", "GOOG"]
+            config.saveToUserDefaults()
+        }
+        
+        // 加載初始數據
+        fetchStockData()
     }
     
     // 從 API 獲取股票數據
@@ -74,40 +41,62 @@ class StockViewModel: ObservableObject {
         isLoading = true
         error = nil
         
-        // TODO: 整合 SwiftYFinance 獲取真實數據
-        // 暫時使用模擬數據
+        let symbols = config.stockSymbols
+        guard !symbols.isEmpty else {
+            isLoading = false
+            return
+        }
         
-        // 模擬網絡請求
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
-            guard let self = self else { return }
-            
-            // 更新測試數據，模擬價格變化
-            self.updateMockData()
-            self.isLoading = false
-            
-            // 檢查警報閾值
-            self.checkAlertThresholds()
-            
-            self.logger.info("Stock data updated successfully")
+        stockFetcher.fetchMultipleStocks(symbols: symbols)
+            .receive(on: DispatchQueue.main)
+            .sink(receiveCompletion: { [weak self] completion in
+                guard let self = self else { return }
+                self.isLoading = false
+                
+                switch completion {
+                case .finished:
+                    break
+                case .failure(let error):
+                    self.error = "獲取股票數據錯誤: \(error.localizedDescription)"
+                    self.logger.error("Error fetching stock data: \(error.localizedDescription)")
+                }
+            }, receiveValue: { [weak self] receivedStocks in
+                guard let self = self else { return }
+                self.stocks = receivedStocks
+                
+                // 檢查警報閾值
+                self.checkAlertThresholds()
+                
+                self.logger.info("Stock data updated successfully: \(receivedStocks.count) stocks")
+                
+                // 如果股票列表發生變化，也獲取歷史數據
+                self.fetchHistoricalDataIfNeeded()
+            })
+            .store(in: &cancellables)
+    }
+    
+    // 獲取歷史數據
+    private func fetchHistoricalDataIfNeeded() {
+        for symbol in config.stockSymbols {
+            if historicalData[symbol] == nil {
+                fetchHistoricalData(for: symbol)
+            }
         }
     }
     
-    // 更新測試數據
-    private func updateMockData() {
-        for i in 0..<stocks.count {
-            if i < stocks.count {
-                let randomChange = Double.random(in: -5.0...5.0)
-                let newPrice = max(stocks[i].price + randomChange, 1.0) // 確保價格為正
-                let changeValue = newPrice - stocks[i].price
-                let changePercent = (changeValue / stocks[i].price) * 100.0
-                
-                stocks[i].price = newPrice
-                stocks[i].change = changeValue
-                stocks[i].changePercent = changePercent
-                stocks[i].timestamp = Date()
-                stocks[i].volume = Int.random(in: 10_000_000...50_000_000)
-            }
-        }
+    // 為特定股票獲取歷史數據
+    func fetchHistoricalData(for symbol: String, period: String = "1mo") {
+        stockFetcher.fetchHistoricalData(for: symbol, period: period)
+            .receive(on: DispatchQueue.main)
+            .sink(receiveCompletion: { [weak self] completion in
+                if case .failure(let error) = completion {
+                    self?.logger.error("Error fetching historical data for \(symbol): \(error.localizedDescription)")
+                }
+            }, receiveValue: { [weak self] dataPoints in
+                self?.historicalData[symbol] = dataPoints
+                self?.logger.info("Historical data updated for \(symbol): \(dataPoints.count) points")
+            })
+            .store(in: &cancellables)
     }
     
     // 檢查是否有觸發警報閾值
@@ -190,7 +179,9 @@ class StockViewModel: ObservableObject {
         if !config.stockSymbols.contains(symbol) {
             config.stockSymbols.append(symbol)
             config.saveToUserDefaults()
-            // TODO: 從 API 獲取新添加的股票數據
+            
+            // 從 API 獲取新添加的股票數據
+            fetchStockData()
         }
     }
     
@@ -203,13 +194,39 @@ class StockViewModel: ObservableObject {
             
             // 同時從當前數據中移除
             stocks.removeAll(where: { $0.symbol == symbol })
+            historicalData.removeValue(forKey: symbol)
         }
     }
     
     // 更新配置
     func updateConfig(_ newConfig: ConfigModel) {
+        let oldInterval = config.refreshInterval
+        let newInterval = newConfig.refreshInterval
+        
         config = newConfig
         config.saveToUserDefaults()
+        
+        // 如果刷新間隔變化，重新設置定時器
+        if oldInterval != newInterval {
+            setupRefreshTimer()
+        }
+        
+        // 如果股票列表變化，重新獲取數據
+        fetchStockData()
+    }
+    
+    // 設置刷新定時器
+    private func setupRefreshTimer() {
+        // 取消現有定時器
+        fetchTimer?.invalidate()
+        
+        // 創建新定時器
+        fetchTimer = Timer.scheduledTimer(timeInterval: config.refreshInterval, target: self, selector: #selector(refreshData), userInfo: nil, repeats: true)
+    }
+    
+    // 刷新數據
+    @objc private func refreshData() {
+        fetchStockData()
     }
 }
 

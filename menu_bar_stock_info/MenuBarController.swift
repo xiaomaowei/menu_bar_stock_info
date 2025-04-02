@@ -213,9 +213,12 @@ class MenuBarController: NSObject {
             popover?.behavior = .transient
         }
         
+        // 獲取股票歷史數據
+        let historicalData = stockViewModel.historicalData[symbol]
+        
         // 設置 SwiftUI 視圖
-        let stockDetailView = StockDetailView(stock: stock)
-        popover?.contentSize = NSSize(width: 320, height: 220)
+        let stockDetailView = StockDetailView(stock: stock, historicalData: historicalData)
+        popover?.contentSize = NSSize(width: 320, height: 320)
         popover?.contentViewController = NSHostingController(rootView: stockDetailView)
         
         // 顯示彈出窗口

@@ -155,7 +155,6 @@ struct SettingsView: View {
             
             TextField("閾值", text: $alertValue)
                 .textFieldStyle(RoundedBorderTextFieldStyle())
-                .keyboardType(.decimalPad)
             
             HStack {
                 Button("取消") {
