@@ -19,6 +19,10 @@ class MenuBarController: NSObject {
     private var rotationTimer: Timer?
     private var popover: NSPopover?
     
+    // 保存打開的窗口引用
+    private var stockDetailWindows = [NSWindow]()
+    private var settingsWindow: NSWindow?
+    
     // 用於股票輪換顯示
     private var shouldRotate: Bool {
         let config = ConfigModel.loadFromUserDefaults()
@@ -35,7 +39,6 @@ class MenuBarController: NSObject {
         
         setupStatusItem()
         setupMenu()
-        startUpdateTimer()
         
         // 訂閱股票數據更新
         stockViewModel.$stocks
@@ -45,6 +48,23 @@ class MenuBarController: NSObject {
                 self?.updateStatusItemDisplay()
             }
             .store(in: &cancellables)
+        
+        // 立即請求更新股票數據
+        DispatchQueue.main.async { [weak self] in
+            self?.refreshData()
+        }
+        
+        // 啟動更新定時器
+        startUpdateTimer()
+            
+        // 檢查是否需要在啟動時顯示設置菜單
+        let config = ConfigModel.loadFromUserDefaults()
+        if config.showSettingsOnStartup {
+            // 延遲一點執行，確保應用程序已完全啟動
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+                self?.openSettings()
+            }
+        }
     }
     
     private func setupStatusItem() {
@@ -57,15 +77,22 @@ class MenuBarController: NSObject {
     
     private func setupMenu() {
         // 添加菜單項
-        menu.addItem(NSMenuItem(title: "更新數據", action: #selector(refreshData), keyEquivalent: "r"))
+        let refreshItem = NSMenuItem(title: "更新數據", action: #selector(refreshData), keyEquivalent: "r")
+        refreshItem.target = self
+        menu.addItem(refreshItem)
         menu.addItem(NSMenuItem.separator())
         
         // 股票列表區域（將動態更新）
         
         menu.addItem(NSMenuItem.separator())
-        menu.addItem(NSMenuItem(title: "設置", action: #selector(openSettings), keyEquivalent: ","))
+        let settingsItem = NSMenuItem(title: "設置", action: #selector(openSettings), keyEquivalent: ",")
+        settingsItem.target = self
+        menu.addItem(settingsItem)
+        
         menu.addItem(NSMenuItem.separator())
-        menu.addItem(NSMenuItem(title: "退出", action: #selector(quitApp), keyEquivalent: "q"))
+        let quitItem = NSMenuItem(title: "退出", action: #selector(quitApp), keyEquivalent: "q")
+        quitItem.target = self
+        menu.addItem(quitItem)
         
         // 設置菜單
         statusItem.menu = menu
@@ -83,9 +110,6 @@ class MenuBarController: NSObject {
         if shouldRotate {
             startRotationTimer()
         }
-        
-        // 立即更新一次數據
-        refreshData()
     }
     
     private func startRotationTimer() {
@@ -101,8 +125,18 @@ class MenuBarController: NSObject {
     }
     
     @objc private func refreshData() {
+        // 更新狀態菜單顯示
+        if let button = statusItem.button {
+            button.title = "更新中..."
+        }
+        
         // 獲取股票數據
         stockViewModel.fetchStockData()
+        
+        // 更新菜單項
+        DispatchQueue.main.async { [weak self] in
+            self?.updateMenuItems()
+        }
     }
     
     private func updateStatusItemDisplay() {
@@ -113,7 +147,7 @@ class MenuBarController: NSObject {
         guard !stockViewModel.stocks.isEmpty else {
             if let button = statusItem.button {
                 button.title = "載入中..."
-                button.contentTintColor = NSColor.textColor
+                applyTextColor(button, config: config, isLoading: true)
             }
             return
         }
@@ -132,73 +166,133 @@ class MenuBarController: NSObject {
         // 更新菜單欄顯示
         if let button = statusItem.button {
             button.title = displayText
-            
-            // 根據股票漲跌設置顏色
-            if stock.isPositive {
-                button.contentTintColor = NSColor.green
-            } else if stock.change < 0 {
-                button.contentTintColor = NSColor.red
-            } else {
-                button.contentTintColor = NSColor.textColor
-            }
+            applyTextColor(button, config: config, stock: stock)
         }
     }
     
+    // 應用文字顏色到狀態欄按鈕
+    private func applyTextColor(_ button: NSStatusBarButton, config: ConfigModel, stock: StockModel? = nil, isLoading: Bool = false) {
+        // 根據配置決定顏色
+        var textColor: NSColor
+        
+        switch config.textColorMode {
+        case .automatic:
+            if let stock = stock {
+                // 根據股票漲跌設置顏色
+                if stock.isPositive {
+                    textColor = NSColor.green
+                } else if stock.change < 0 {
+                    textColor = NSColor.red
+                } else {
+                    textColor = NSColor.labelColor
+                }
+            } else {
+                textColor = NSColor.labelColor
+            }
+        case .fixed:
+            // 固定使用白色
+            textColor = NSColor.white
+        case .system:
+            // 使用系統默認顏色
+            textColor = NSColor.labelColor
+        }
+        
+        // 應用顏色到按鈕文字
+        let title = button.title
+        let attributedString = NSMutableAttributedString(string: title)
+        attributedString.addAttribute(.foregroundColor, value: textColor, range: NSRange(location: 0, length: title.count))
+        button.attributedTitle = attributedString
+    }
+    
     private func formatDisplayText(stock: StockModel, format: ConfigModel.DisplayFormat, showPercent: Bool, customFormat: String?) -> String {
+        let formattedPrice = String(format: "%.2f", stock.price)
+        let formattedChange = stock.change >= 0 ? String(format: "+%.2f", stock.change) : String(format: "%.2f", stock.change)
+        let formattedChangePercent = stock.formattedChangePercent
+        
         switch format {
         case .symbolAndPrice:
-            return "\(stock.symbol): \(stock.formattedPrice)"
+            return "\(stock.symbol): \(formattedPrice)"
         case .symbolAndChange:
             if showPercent {
-                return "\(stock.symbol): \(stock.formattedChange) (\(stock.formattedChangePercent))"
+                return "\(stock.symbol): \(formattedChange) (\(formattedChangePercent))"
             } else {
-                return "\(stock.symbol): \(stock.formattedChange)"
+                return "\(stock.symbol): \(formattedChange)"
             }
         case .priceOnly:
-            return stock.formattedPrice
+            return formattedPrice
         case .changeOnly:
             if showPercent {
-                return "\(stock.formattedChange) (\(stock.formattedChangePercent))"
+                return "\(formattedChange) (\(formattedChangePercent))"
             } else {
-                return stock.formattedChange
+                return formattedChange
             }
         case .custom:
             if let customFormat = customFormat {
                 var result = customFormat
                 result = result.replacingOccurrences(of: "{symbol}", with: stock.symbol)
-                result = result.replacingOccurrences(of: "{price}", with: stock.formattedPrice)
-                result = result.replacingOccurrences(of: "{change}", with: stock.formattedChange)
-                result = result.replacingOccurrences(of: "{percent}", with: stock.formattedChangePercent)
+                result = result.replacingOccurrences(of: "{price}", with: formattedPrice)
+                result = result.replacingOccurrences(of: "{change}", with: formattedChange)
+                result = result.replacingOccurrences(of: "{percent}", with: formattedChangePercent)
                 return result
             } else {
-                return "\(stock.symbol): \(stock.formattedPrice)"
+                return "\(stock.symbol): \(formattedPrice)"
             }
         }
     }
     
     private func updateMenuItems() {
-        // 首先清除舊的股票菜單項
-        let topItems = 2 // "更新數據" 和 分隔線
-        let bottomItems = 4 // 分隔線, "設置", 分隔線, "退出"
+        // 清除現有菜單項目
+        menu.removeAllItems()
         
-        while menu.items.count > topItems + bottomItems {
-            menu.removeItem(at: topItems)
-        }
+        // 獲取當前設置
+        let config = ConfigModel.loadFromUserDefaults()
         
-        // 添加股票項目
+        // 添加更新數據菜單項
+        let refreshItem = NSMenuItem(title: "更新數據", action: #selector(refreshData), keyEquivalent: "r")
+        refreshItem.target = self
+        menu.addItem(refreshItem)
+        menu.addItem(NSMenuItem.separator())
+        
+        // 添加所有股票項目
         for stock in stockViewModel.stocks {
-            let stockItem = NSMenuItem(title: "\(stock.symbol): \(stock.formattedPrice) \(stock.formattedChange)", action: #selector(showStockDetail(_:)), keyEquivalent: "")
-            stockItem.representedObject = stock.symbol
+            let displayText = formatDisplayText(stock: stock, format: config.displayFormat, showPercent: config.showChangePercent, customFormat: config.customFormatString)
+            let menuItem = NSMenuItem(title: displayText, action: #selector(showStockDetail(_:)), keyEquivalent: "")
+            menuItem.target = self
+            menuItem.representedObject = stock.symbol
             
-            // 設置股票項目的顏色
-            if let attributedTitle = stockItem.attributedTitle?.mutableCopy() as? NSMutableAttributedString {
-                let color: NSColor = stock.isPositive ? .green : (stock.change < 0 ? .red : .textColor)
-                attributedTitle.addAttribute(.foregroundColor, value: color, range: NSRange(location: 0, length: attributedTitle.length))
-                stockItem.attributedTitle = attributedTitle
+            // 設置股票項目顏色
+            let attributedTitle = NSMutableAttributedString(string: displayText)
+            let color: NSColor
+            
+            // 根據股票漲跌設置顏色
+            if stock.isPositive {
+                color = NSColor.green
+            } else if stock.change < 0 {
+                color = NSColor.red
+            } else {
+                color = NSColor.labelColor
             }
             
-            menu.insertItem(stockItem, at: topItems)
+            attributedTitle.addAttribute(.foregroundColor, value: color, range: NSRange(location: 0, length: attributedTitle.length))
+            menuItem.attributedTitle = attributedTitle
+            
+            menu.addItem(menuItem)
         }
+        
+        // 添加分隔線
+        menu.addItem(NSMenuItem.separator())
+        
+        // 添加設置菜單項
+        let settingsItem = NSMenuItem(title: "設置", action: #selector(openSettings), keyEquivalent: ",")
+        settingsItem.target = self
+        menu.addItem(settingsItem)
+        
+        // 添加退出項
+        let quitItem = NSMenuItem(title: "退出", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+        menu.addItem(quitItem)
+        
+        // 綁定菜單到狀態項
+        statusItem.menu = menu
     }
     
     @objc private func showStockDetail(_ sender: NSMenuItem) {
@@ -207,35 +301,142 @@ class MenuBarController: NSObject {
             return
         }
         
-        // 創建彈出窗口
-        if popover == nil {
-            popover = NSPopover()
-            popover?.behavior = .transient
+        // 檢查該股票的詳情視窗是否已經打開
+        for existingWindow in stockDetailWindows {
+            if existingWindow.title == "\(symbol) 詳情" {
+                // 如果已經有此股票的視窗，則激活它並返回
+                existingWindow.orderFrontRegardless()
+                existingWindow.level = .floating
+                activateApp()
+                return
+            }
         }
         
         // 獲取股票歷史數據
-        let historicalData = stockViewModel.historicalData[symbol]
+        let historicalData = stockViewModel.historicalData[symbol] ?? []
         
-        // 設置 SwiftUI 視圖
+        // 創建股票詳情視圖
         let stockDetailView = StockDetailView(stock: stock, historicalData: historicalData)
-        popover?.contentSize = NSSize(width: 320, height: 320)
-        popover?.contentViewController = NSHostingController(rootView: stockDetailView)
         
-        // 顯示彈出窗口
-        if let button = statusItem.button {
-            popover?.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
-        }
+        // 創建視圖控制器和窗口
+        let viewController = NSHostingController(rootView: stockDetailView)
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 320, height: 320),
+            styleMask: [.titled, .closable],
+            backing: .buffered,
+            defer: false
+        )
+        window.contentViewController = viewController
+        window.title = "\(symbol) 詳情"
+        window.center()
+        window.level = .floating
+        window.orderFrontRegardless()
+        
+        // 設置窗口關閉時的回調，清除引用
+        window.isReleasedWhenClosed = false
+        window.delegate = self
+        
+        // 保存窗口引用
+        stockDetailWindows.append(window)
+        
+        // 激活應用程序
+        activateApp()
     }
     
     @objc private func openSettings() {
-        // 獲取主視窗
-        if let window = NSApplication.shared.windows.first {
-            window.makeKeyAndOrderFront(nil)
-            NSApplication.shared.activate(ignoringOtherApps: true)
+        // 如果設置窗口已經打開，則直接激活它
+        if let existingWindow = settingsWindow {
+            if existingWindow.isVisible {
+                // 窗口已經可見，只需置頂並激活
+                existingWindow.orderFrontRegardless()
+                existingWindow.level = .floating
+                activateApp()
+                return
+            } else {
+                // 窗口存在但不可見，直接顯示
+                existingWindow.orderFrontRegardless()
+                existingWindow.level = .floating
+                activateApp()
+                return
+            }
+        }
+        
+        // 創建設置視圖
+        let settingsViewModel = SettingsViewModel(stockViewModel: stockViewModel)
+        let settingsView = SettingsView(viewModel: settingsViewModel, stockViewModel: stockViewModel)
+        
+        // 創建視圖控制器和窗口
+        let viewController = NSHostingController(rootView: settingsView)
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 400, height: 650),
+            styleMask: [.titled, .closable],
+            backing: .buffered,
+            defer: false
+        )
+        window.contentViewController = viewController
+        window.title = "設置"
+        window.level = .floating // 設置為浮動窗口，確保顯示在最上層
+        
+        // 獲取鼠標位置並設置窗口位置
+        var mouseLocation = NSEvent.mouseLocation
+        
+        // 根據屏幕大小調整窗口位置，確保窗口完全可見
+        let screenFrame = NSScreen.main?.visibleFrame ?? NSRect.zero
+        let windowSize = window.frame.size
+        
+        // 確保窗口不會超出屏幕右邊界
+        if mouseLocation.x + windowSize.width > screenFrame.maxX {
+            mouseLocation.x = screenFrame.maxX - windowSize.width
+        }
+        
+        // 確保窗口不會超出屏幕底部
+        if mouseLocation.y - windowSize.height < screenFrame.minY {
+            mouseLocation.y = screenFrame.minY + windowSize.height
+        }
+        
+        // 設置窗口位置，將鼠標位置作為窗口的左上角
+        window.setFrameTopLeftPoint(mouseLocation)
+        
+        // 顯示窗口，使用orderFrontRegardless確保置頂
+        window.orderFrontRegardless()
+        
+        // 設置窗口關閉時的回調，清除引用
+        window.isReleasedWhenClosed = false
+        window.delegate = self
+        
+        // 保存窗口引用
+        settingsWindow = window
+        
+        // 將窗口置於前台並激活
+        activateApp()
+    }
+    
+    // 跨macOS版本兼容的應用激活方法
+    private func activateApp() {
+        if #available(macOS 14.0, *) {
+            NSApp.activate()
+        } else {
+            NSApp.activate(ignoringOtherApps: true)
         }
     }
     
     @objc private func quitApp() {
         NSApplication.shared.terminate(nil)
+    }
+}
+
+// MARK: - NSWindowDelegate
+extension MenuBarController: NSWindowDelegate {
+    func windowWillClose(_ notification: Notification) {
+        guard let window = notification.object as? NSWindow else { return }
+        
+        // 如果是設置窗口關閉
+        if window == settingsWindow {
+            settingsWindow = nil
+            return
+        }
+        
+        // 如果是股票詳情窗口關閉
+        stockDetailWindows.removeAll { $0 == window }
     }
 } 

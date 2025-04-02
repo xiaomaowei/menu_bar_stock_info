@@ -25,6 +25,8 @@ struct ConfigModel: Codable {
     var showChangePercent: Bool
     var rotateStocks: Bool
     var alertThresholds: [String: [AlertThreshold]]
+    var showSettingsOnStartup: Bool // 啟動時顯示設置菜單
+    var textColorMode: TextColorMode // 選單列文字顏色模式
     
     // 顯示格式枚舉
     enum DisplayFormat: String, Codable, CaseIterable {
@@ -33,6 +35,13 @@ struct ConfigModel: Codable {
         case priceOnly = "Price Only"
         case changeOnly = "Change Only"
         case custom = "Custom"
+    }
+    
+    // 文字顏色模式
+    enum TextColorMode: String, Codable, CaseIterable {
+        case automatic = "自動（根據漲跌顯示紅綠色）"
+        case fixed = "固定顏色（白色）"
+        case system = "系統默認顏色"
     }
     
     // 自定義格式字符串
@@ -46,7 +55,9 @@ struct ConfigModel: Codable {
             displayFormat: .symbolAndPrice,
             showChangePercent: true,
             rotateStocks: false,
-            alertThresholds: [:]
+            alertThresholds: [:],
+            showSettingsOnStartup: false, // 默認不在啟動時顯示設置菜單
+            textColorMode: .automatic // 默認使用自動顏色模式
         )
     }
     

@@ -12,6 +12,7 @@ class SettingsViewModel: ObservableObject {
     @Published var config: ConfigModel
     @Published var newStockSymbol: String = ""
     @Published var errorMessage: String? = nil
+    @Published var isLoading: Bool = false
     
     private var cancellables = Set<AnyCancellable>()
     private let stockViewModel: StockViewModel
@@ -29,45 +30,58 @@ class SettingsViewModel: ObservableObject {
     
     // 添加股票
     func addStock() {
-        guard !newStockSymbol.isEmpty else {
+        let trimmedSymbol = newStockSymbol.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+        guard !trimmedSymbol.isEmpty else {
             errorMessage = "股票代碼不能為空"
             return
         }
         
-        let symbol = newStockSymbol.uppercased().trimmingCharacters(in: .whitespacesAndNewlines)
-        
-        // 檢查股票是否已存在
-        if config.stockSymbols.contains(symbol) {
-            errorMessage = "股票 \(symbol) 已存在於列表中"
+        // 檢查是否已經存在
+        guard !config.stockSymbols.contains(trimmedSymbol) else {
+            errorMessage = "股票代碼已存在"
             return
         }
         
-        // TODO: 驗證股票代碼是否有效
-        
-        // 添加到列表
-        config.stockSymbols.append(symbol)
-        saveSettings()
-        
-        // 通知 StockViewModel 獲取新添加的股票數據
-        stockViewModel.addStock(symbol: symbol)
-        
-        // 清空輸入框
-        newStockSymbol = ""
+        isLoading = true
         errorMessage = nil
+        
+        // 使用StockFetcher驗證股票代碼
+        let stockFetcher = StockFetcher()
+        stockFetcher.validateStockSymbol(trimmedSymbol)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] completion in
+                guard let self = self else { return }
+                self.isLoading = false
+                
+                if case .failure(let error) = completion {
+                    self.errorMessage = "驗證股票代碼時發生錯誤: \(error.localizedDescription)"
+                }
+            } receiveValue: { [weak self] isValid in
+                guard let self = self else { return }
+                
+                if isValid {
+                    self.config.stockSymbols.append(trimmedSymbol)
+                    self.saveSettings()
+                    self.newStockSymbol = ""
+                } else {
+                    self.errorMessage = "無法驗證股票代碼 \(trimmedSymbol)，請確認股票代碼是否正確"
+                }
+            }
+            .store(in: &cancellables)
     }
     
     // 刪除股票
     func removeStock(at offsets: IndexSet) {
-        let symbolsToRemove = offsets.map { config.stockSymbols[$0] }
         config.stockSymbols.remove(atOffsets: offsets)
-        
-        // 同時刪除對應的閾值
-        for symbol in symbolsToRemove {
-            config.alertThresholds[symbol] = nil
-            stockViewModel.removeStock(symbol: symbol)
-        }
-        
         saveSettings()
+    }
+    
+    // 使用股票代碼移除股票
+    func removeStock(_ symbol: String) {
+        if let index = config.stockSymbols.firstIndex(of: symbol) {
+            config.stockSymbols.remove(at: index)
+            saveSettings()
+        }
     }
     
     // 添加警報閾值
