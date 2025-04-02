@@ -23,4 +23,4 @@ let package = Package(
             ],
             path: "menu_bar_stock_info"),
     ]
-) 
+)

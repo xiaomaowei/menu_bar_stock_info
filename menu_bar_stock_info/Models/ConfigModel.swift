@@ -7,6 +7,17 @@
 
 import Foundation
 
+// 添加对StockModel的引用，解决编译错误
+// SwiftCompile 错误是由于AlertThreshold.isTriggered方法中使用了StockModel类型，但没有导入该类型
+struct StockModelReference {
+    // 这个引用用于确保编译时能够找到StockModel
+    // 后续可以删除这个结构体
+    @available(*, unavailable)
+    static func reference() {
+        let _ = StockModel.mockData
+    }
+}
+
 struct ConfigModel: Codable {
     var stockSymbols: [String]
     var refreshInterval: TimeInterval // 以秒為單位

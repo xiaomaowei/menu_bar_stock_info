@@ -195,6 +195,9 @@
 			);
 			mainGroup = FFE932552D9D0E94003E1B79;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				FFE9329C2D9D1EFD003E1B79 /* XCRemoteSwiftPackageReference "SwiftYFinance" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = FFE9325F2D9D0E94003E1B79 /* Products */;
 			projectDirPath = "";
@@ -555,6 +558,17 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		FFE9329C2D9D1EFD003E1B79 /* XCRemoteSwiftPackageReference "SwiftYFinance" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/AlexRoar/SwiftYFinance";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.1.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
 	};
 	rootObject = FFE932562D9D0E94003E1B79 /* Project object */;
 }
