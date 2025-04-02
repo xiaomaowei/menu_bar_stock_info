@@ -1,0 +1,93 @@
+# macOS App 開發規範
+# 本文檔旨在為開發 macOS App 提供詳細的規則和指南，確保項目在開發、測試、部署等各階段均符合最佳實踐。
+
+## 1. 項目概述
+
+- **項目名稱:** 菜單欄股票價格顯示應用
+- **描述:** 一個基於 Swift 和 SwiftUI 的 macOS 菜單欄應用，顯示當前股票價格或收盤價。
+
+---
+
+## 2. 開發環境
+
+- **編程語言:** Swift 5.8 或更新版本
+- **操作系統支持:** macOS 13 Ventura 或更高版本
+- **開發工具:** Xcode 15 或更新版本
+- **界面框架:** SwiftUI
+- **應用架構:** MVVM (Model-View-ViewModel)
+- **版本管理:** 使用 Git
+
+---
+
+## 3. 依賴管理與技術棧
+
+- **包管理工具:** 使用 Swift Package Manager (SPM)
+- **外部庫:**
+  - SwiftYFinance: 獲取股票行情數據
+  - URLSession: 處理網路請求
+  - Combine: 處理異步數據流
+  - AppKit: 操控菜單欄圖標和應用狀態
+
+---
+
+## 4. 項目結構
+
+- **AppDelegate.swift:** 應用生命週期管理
+- **StockFetcher.swift:** 股票數據抓取模塊
+- **MenuBarController.swift:** 菜單欄圖標及狀態管理
+- **ContentView.swift:** UI 視圖
+- **Models:** 數據模型和結構
+  - **StockModel.swift:** 股票數據模型
+  - **ConfigModel.swift:** 用戶配置模型
+- **ViewModels:** 數據綁定和狀態管理
+  - **StockViewModel.swift:** 股票數據視圖模型
+  - **SettingsViewModel.swift:** 設置視圖模型
+- **Views:** 用戶界面組件
+  - **SettingsView.swift:** 設置頁面
+  - **StockDetailView.swift:** 股票詳情頁面
+
+---
+
+## 5. 測試與調試
+
+- **測試框架:** XCTest
+- **測試範圍:**
+  - API 響應數據正確性
+  - 異常處理和錯誤顯示
+  - 菜單欄更新頻率和正確性
+- **測試環境:** macOS Ventura
+
+---
+
+## 6. 部署與發布
+
+- **應用簽名:** 使用 Apple Developer 帳戶進行簽名
+- **打包格式:** .app 格式，支持直接運行和 DMG 安裝包
+- **版本管理:** 使用自動遞增版本號
+- **發布渠道:** Mac App Store 和 GitHub Releases
+
+---
+
+## 7. 數據隱私與安全
+
+- **API 金鑰管理:** 使用 macOS 鑰匙串存儲敏感數據
+- **數據傳輸:** 通過 HTTPS 請求確保數據加密
+- **隱私聲明:** 在應用中提供隱私政策鏈接
+
+---
+
+## 8. 日誌管理
+
+- **日誌輸出:** 使用內建的 OSLog 進行日誌記錄
+- **日誌級別:** Info、Warning、Error
+- **存儲位置:** ~/Library/Logs/menu_bar_stock_info/
+
+---
+
+## 9. 用戶體驗設計
+
+- **菜單欄顯示:** 簡潔清晰，僅顯示最關鍵的股票信息
+- **顏色編碼:** 使用紅色和綠色分別表示股票漲跌
+- **字體選擇:** 使用系統字體確保可讀性
+- **交互反饋:** 提供恰當的視覺和聲音反饋
+- **易用性:** 設計直觀的用戶界面，減少學習成本
