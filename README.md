@@ -2,7 +2,8 @@
 
 一个精简而功能强大的 macOS 菜单栏应用，用于实时监控股票价格和市场动态。
 
-![应用截图](docs/screenshot.png)
+<img width="856" alt="image" src="https://github.com/user-attachments/assets/cf777af5-4fe5-49cd-8f66-ff728b849a48" />
+
 
 ## 功能特点
 
