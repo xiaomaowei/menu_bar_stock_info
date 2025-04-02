@@ -12,7 +12,8 @@ import SwiftYFinance
 
 class StockFetcher {
     private let logger = Logger(subsystem: "com.menu-bar-stock-info", category: "StockFetcher")
-    private let yFinance = SwiftYFinance()
+    // 不要创建SwiftYFinance的实例，因为它是使用类方法的
+    // private let yFinance = SwiftYFinance()
     
     // 從 API 獲取股票數據
     func fetchStockData(for symbol: String) -> AnyPublisher<StockModel, Error> {
@@ -40,8 +41,8 @@ class StockFetcher {
     // 使用 SwiftYFinance 獲取實際股票數據
     private func fetchRealStockData(for symbol: String) -> AnyPublisher<StockModel, Error> {
         return Future<StockModel, Error> { promise in
-            // 獲取股票報價
-            self.yFinance.fetchQuote(ticker: symbol) { result, error in
+            // 獲取股票報價 - 使用类方法
+            SwiftYFinance.fetchQuote(ticker: symbol) { result, error in
                 if let error = error {
                     promise(.failure(error))
                     return
@@ -80,7 +81,8 @@ class StockFetcher {
     // 獲取股票歷史數據
     func fetchHistoricalData(for symbol: String, period: String = "1mo") -> AnyPublisher<[HistoricalDataPoint], Error> {
         return Future<[HistoricalDataPoint], Error> { promise in
-            self.yFinance.fetchChartData(for: symbol, period: period) { result, error in
+            // 这里也使用类方法
+            SwiftYFinance.fetchChartData(for: symbol, period: period) { result, error in
                 if let error = error {
                     promise(.failure(error))
                     return

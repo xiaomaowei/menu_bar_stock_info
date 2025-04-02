@@ -1,0 +1,25 @@
+# pack-refs with: peeled fully-peeled sorted 
+08de10916d40302d03c5220a03e8c083a221e613 refs/heads/master
+5f969b126aa99c234ac2c3d46888225de34d565f refs/heads/master-cf-autofix
+5f969b126aa99c234ac2c3d46888225de34d565f refs/pull/1/head
+897a688ace408ffaf02df935407eda09f7972de3 refs/pull/4/head
+604b8cd74ae6b8b8ce8a32b02e8ce65336ab4dbe refs/pull/6/head
+a8db67d17ec25c6ab3e58850af537157ab3d7c27 refs/pull/8/head
+c1d3639f1347d02a030c665a1b80d1912ed7d6cd refs/pull/9/head
+007352af5d30cdfce304b17cd2a2c3abdb6ede0f refs/tags/0.1.0
+65ed3267481203e6b07497c2e3ce571a0a1a6bb4 refs/tags/0.1.1
+^81fe6ff53ad24f5ec00efb2be5f264b5cd034b79
+380b9abdaf9f3515bae6397fa0d9d8bd35c6cbbf refs/tags/0.1.2
+fa79372ff63b28ef7e755248391429460665f939 refs/tags/0.1.3
+9bfc8c47d1f8aec0aeeef2cf1a952cdfa37387ef refs/tags/0.1.4
+72bb99fd8bf9de791e99e592c108e13eba488f11 refs/tags/1.0.0
+fffc1bbf6955db3add3538dcadb697495c74478d refs/tags/1.1.0
+1329d835140c0b556288faf14c2cd5cced74e8c5 refs/tags/1.2.0
+5846b8a549aef2586f8845e93eb8044321523a12 refs/tags/1.2.1
+ec1ea39f3a24ac95b4b5a87ced85982a8068f06c refs/tags/1.2.2
+bc06fbd5be5a373adfc92676d5b6e23b61a0f301 refs/tags/1.2.3
+ef45bc0a80b289e006b39b5cb8405916b1879eec refs/tags/1.3.0
+08a0b65959d6525e85565ccdd6958bfd83f961dc refs/tags/1.4.0
+ad0b47c6df68160c66f20e5a39a32ec2edef6352 refs/tags/1.5.0
+bcc81f5648e6bd189f7a0fdb97ddaf70dff8133f refs/tags/2.0.0
+08de10916d40302d03c5220a03e8c083a221e613 refs/tags/2.1.0
