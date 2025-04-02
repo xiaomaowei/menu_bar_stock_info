@@ -12,8 +12,6 @@ import SwiftYFinance
 
 class StockFetcher {
     private let logger = Logger(subsystem: "com.menu-bar-stock-info", category: "StockFetcher")
-    // 不要创建SwiftYFinance的实例，因为它是使用类方法的
-    // private let yFinance = SwiftYFinance()
     
     // 從 API 獲取股票數據
     func fetchStockData(for symbol: String) -> AnyPublisher<StockModel, Error> {
@@ -41,66 +39,84 @@ class StockFetcher {
     // 使用 SwiftYFinance 獲取實際股票數據
     private func fetchRealStockData(for symbol: String) -> AnyPublisher<StockModel, Error> {
         return Future<StockModel, Error> { promise in
-            // 獲取股票報價 - 使用类方法
-            SwiftYFinance.fetchQuote(ticker: symbol) { result, error in
+            // 使用 summaryDataBy 獲取股票摘要數據
+            SwiftYFinance.summaryDataBy(identifier: symbol) { summary, error in
                 if let error = error {
                     promise(.failure(error))
                     return
                 }
                 
-                guard let quote = result,
-                      let price = quote.bid.value ?? quote.regularMarketPrice,
-                      let change = quote.regularMarketChange,
-                      let changePercent = quote.regularMarketChangePercent,
-                      let volume = quote.regularMarketVolume else {
-                    promise(.failure(NSError(domain: "com.menu-bar-stock-info", code: 1, userInfo: [NSLocalizedDescriptionKey: "不完整的股票數據"])))
+                guard let summary = summary else {
+                    promise(.failure(NSError(domain: "com.menu-bar-stock-info", code: 1, userInfo: [NSLocalizedDescriptionKey: "無法獲取股票摘要數據"])))
                     return
                 }
                 
-                // 創建 StockModel
-                let stock = StockModel(
-                    symbol: symbol,
-                    name: quote.shortName ?? symbol,
-                    price: price,
-                    change: change,
-                    changePercent: changePercent,
-                    volume: volume,
-                    marketCap: quote.marketCap,
-                    high52Week: quote.fiftyTwoWeekHigh,
-                    low52Week: quote.fiftyTwoWeekLow,
-                    timestamp: Date()
-                )
-                
-                promise(.success(stock))
+                // 獲取實時股價數據
+                SwiftYFinance.recentDataBy(identifier: symbol) { recentData, error in
+                    if let error = error {
+                        promise(.failure(error))
+                        return
+                    }
+                    
+                    guard let recentData = recentData,
+                          let price = recentData.price,
+                          let change = recentData.change,
+                          let changePercent = recentData.changePercent else {
+                        promise(.failure(NSError(domain: "com.menu-bar-stock-info", code: 2, userInfo: [NSLocalizedDescriptionKey: "無法獲取實時股價數據"])))
+                        return
+                    }
+                    
+                    // 創建 StockModel
+                    let stock = StockModel(
+                        symbol: symbol,
+                        name: summary.shortName ?? symbol,
+                        price: price,
+                        change: change,
+                        changePercent: changePercent,
+                        volume: summary.regularMarketVolume?.value ?? 0,
+                        marketCap: summary.marketCap?.value,
+                        high52Week: summary.fiftyTwoWeekHigh?.value,
+                        low52Week: summary.fiftyTwoWeekLow?.value,
+                        timestamp: Date()
+                    )
+                    
+                    promise(.success(stock))
+                }
             }
         }
-        .timeout(5, scheduler: DispatchQueue.global()) // 設置超時時間
+        .timeout(10, scheduler: DispatchQueue.global()) // 設置超時時間
         .eraseToAnyPublisher()
     }
     
     // 獲取股票歷史數據
     func fetchHistoricalData(for symbol: String, period: String = "1mo") -> AnyPublisher<[HistoricalDataPoint], Error> {
         return Future<[HistoricalDataPoint], Error> { promise in
-            // 这里也使用类方法
-            SwiftYFinance.fetchChartData(for: symbol, period: period) { result, error in
+            // 使用 chartDataBy 獲取圖表數據
+            let currentDate = Date()
+            let oneMonthAgo = Calendar.current.date(byAdding: .month, value: -1, to: currentDate) ?? currentDate
+            
+            SwiftYFinance.chartDataBy(identifier: symbol, start: oneMonthAgo, end: currentDate, interval: .oneday) { chartData, error in
                 if let error = error {
                     promise(.failure(error))
                     return
                 }
                 
-                guard let chartData = result,
-                      let timestamps = chartData.meta.timestamp,
-                      let prices = chartData.meta.regularMarketPrice,
-                      timestamps.count == prices.count else {
-                    promise(.failure(NSError(domain: "com.menu-bar-stock-info", code: 2, userInfo: [NSLocalizedDescriptionKey: "無效的歷史數據"])))
+                guard let chartData = chartData, !chartData.isEmpty else {
+                    promise(.failure(NSError(domain: "com.menu-bar-stock-info", code: 3, userInfo: [NSLocalizedDescriptionKey: "無效的歷史數據"])))
                     return
                 }
                 
                 var dataPoints: [HistoricalDataPoint] = []
                 
-                for i in 0..<timestamps.count {
-                    let timestamp = Date(timeIntervalSince1970: Double(timestamps[i]))
-                    dataPoints.append(HistoricalDataPoint(date: timestamp, price: prices[i]))
+                for data in chartData {
+                    if let timestamp = data.timestamp, let close = data.close {
+                        dataPoints.append(HistoricalDataPoint(date: timestamp, price: close))
+                    }
+                }
+                
+                if dataPoints.isEmpty {
+                    promise(.failure(NSError(domain: "com.menu-bar-stock-info", code: 4, userInfo: [NSLocalizedDescriptionKey: "無法解析歷史數據點"])))
+                    return
                 }
                 
                 promise(.success(dataPoints))
